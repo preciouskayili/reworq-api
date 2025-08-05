@@ -1,0 +1,170 @@
+import { OAuth2Client } from "google-auth-library";
+import { google } from "googleapis";
+import { env } from "../config/env";
+import { getGoogleService } from "../lib/googleapis";
+import { logger } from "../lib/logger";
+import { AuthRequest } from "../middleware/auth";
+
+class GoogleService {
+  private client: OAuth2Client | null = null;
+
+  constructor(req: AuthRequest) {
+    getGoogleService(req)
+      .then((client) => {
+        this.client = client;
+      })
+      .catch((error) => {
+        logger.error("Error initializing Google service:", error);
+        this.client = null;
+      });
+  }
+
+  /**
+   * Checks for conflicting events in the user's primary Google Calendar.
+   * @param start - The start time of the event (ISO string or Date).
+   * @param end - The end time of the event (ISO string or Date).
+   * @returns An array of conflicting events, or an empty array if none found.
+   */
+  async checkConflict(
+    start: string | Date,
+    end: string | Date
+  ): Promise<any[]> {
+    if (!this.client) throw new Error("Google client not initialized");
+    const calendar = google.calendar({ version: "v3", auth: this.client });
+
+    const timeMin = typeof start === "string" ? start : start.toISOString();
+    const timeMax = typeof end === "string" ? end : end.toISOString();
+
+    const res = await calendar.events.list({
+      calendarId: "primary",
+      timeMin,
+      timeMax,
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 10,
+    });
+
+    // Filter out cancelled events
+    const events = (res.data.items || []).filter(
+      (event) => event.status !== "cancelled"
+    );
+
+    return events;
+  }
+
+  /**
+   * Creates a new event in the user's primary Google Calendar.
+   * @param eventData - The event details (summary, description, start, end, etc.)
+   */
+  async createEvent(eventData: any) {
+    if (!this.client) throw new Error("Google client not initialized");
+    const calendar = google.calendar({ version: "v3", auth: this.client });
+
+    let requestBody = { ...eventData };
+
+    if (
+      eventData.location &&
+      typeof eventData.location === "string" &&
+      eventData.location.trim().toLowerCase() === "google meet"
+    ) {
+      requestBody = {
+        ...eventData,
+        conferenceData: {
+          createRequest: {
+            requestId: `meet-${Date.now()}-${Math.floor(
+              Math.random() * 10000
+            )}`,
+            conferenceSolutionKey: { type: "hangoutsMeet" },
+          },
+        },
+      };
+    }
+
+    const res = await calendar.events.insert({
+      calendarId: "primary",
+      requestBody,
+      conferenceDataVersion:
+        requestBody.conferenceData !== undefined ? 1 : undefined,
+    });
+
+    return res.data;
+  }
+
+  /**
+   * Edits an existing event in the user's primary Google Calendar.
+   * @param eventId - The ID of the event to edit.
+   * @param updates - The updated event details.
+   */
+  async editEvent(eventId: string, updates: any) {
+    if (!this.client) throw new Error("Google client not initialized");
+    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const res = await calendar.events.patch({
+      calendarId: "primary",
+      eventId,
+      requestBody: updates,
+    });
+    return res.data;
+  }
+
+  /**
+   * Deletes an event from the user's primary Google Calendar.
+   * @param eventId - The ID of the event to delete.
+   */
+  async deleteEvent(eventId: string) {
+    if (!this.client) throw new Error("Google client not initialized");
+    const calendar = google.calendar({ version: "v3", auth: this.client });
+    await calendar.events.delete({
+      calendarId: "primary",
+      eventId,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Fetches events from the user's primary Google Calendar.
+   * @param params - Optional query parameters (e.g., timeMin, timeMax, maxResults)
+   */
+  async fetchEvents(params: any = {}) {
+    if (!this.client) throw new Error("Google client not initialized");
+    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const res = await calendar.events.list({
+      calendarId: "primary",
+      ...params,
+    });
+    return res.data.items || [];
+  }
+
+  /**
+   * Reschedules an event by updating its start and end times.
+   * @param eventId - The ID of the event to reschedule.
+   * @param newStart - The new start time (RFC3339 string or Date object).
+   * @param newEnd - The new end time (RFC3339 string or Date object).
+   */
+  async rescheduleEvent(
+    eventId: string,
+    newStart: string | Date,
+    newEnd: string | Date
+  ) {
+    if (!this.client) throw new Error("Google client not initialized");
+    const calendar = google.calendar({ version: "v3", auth: this.client });
+
+    const res = await calendar.events.patch({
+      calendarId: "primary",
+      eventId,
+      requestBody: {
+        start: {
+          dateTime:
+            typeof newStart === "string" ? newStart : newStart.toISOString(),
+        },
+        end: {
+          dateTime: typeof newEnd === "string" ? newEnd : newEnd.toISOString(),
+        },
+      },
+    });
+
+    return res.data;
+  }
+}
+
+export default GoogleService;
