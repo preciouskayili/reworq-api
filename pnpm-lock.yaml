@@ -66,8 +66,8 @@ importers:
         specifier: ^3.17.0
         version: 3.17.0
       zod:
-        specifier: ^4.0.14
-        version: 4.0.14
+        specifier: ^4.0.15
+        version: 4.0.15
     devDependencies:
       '@types/compression':
         specifier: ^1.8.1
@@ -1049,8 +1049,8 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
-  zod@4.0.14:
-    resolution: {integrity: sha512-nGFJTnJN6cM2v9kXL+SOBq3AtjQby3Mv5ySGFof5UGRHrRioSJ5iG680cYNjE/yWk671nROcpPj4hAS8nyLhSw==}
+  zod@4.0.15:
+    resolution: {integrity: sha512-2IVHb9h4Mt6+UXkyMs0XbfICUh1eUrlJJAOupBHUhLRnKkruawyDddYRCs0Eizt900ntIMk9/4RksYl+FgSpcQ==}
 
 snapshots:
 
@@ -2039,4 +2039,4 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  zod@4.0.14: {}
+  zod@4.0.15: {}

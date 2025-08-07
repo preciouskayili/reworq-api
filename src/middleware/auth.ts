@@ -1,12 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { UserModel } from "../models/User";
-import { User } from "../types/user";
-
-const JWT_SECRET = process.env.JWT_SECRET || "changeme";
+import { env } from "../config/env";
 
 export interface AuthRequest extends Request {
-  user?: User;
+  user?: any;
 }
 
 export async function requireAuth(
@@ -21,13 +19,13 @@ export async function requireAuth(
     const token = authHeader.split("Bearer ")[1];
 
     try {
-      const payload = jwt.verify(token, JWT_SECRET) as any;
+      const payload = jwt.verify(token, env.JWT_SECRET) as any;
       const user = await UserModel.findById(payload.userId);
 
       if (!user) {
         res.status(401).json({ message: "User not found" });
       } else {
-        (req as AuthRequest).user = user.toObject() as unknown as User;
+        (req as AuthRequest).user = user;
         next();
       }
     } catch (err) {

@@ -4,14 +4,17 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { env } from "../config/env";
 import { Resend } from "resend";
+import { logger } from "../lib/logger";
 
 const resend = new Resend(env.RESEND_API_KEY);
 
 const magicLinkRequestSchema = z.object({
-  email: z.email({
-    message: "Invalid email address",
-  }),
-  name: z.string().optional(),
+  email: z
+    .email({
+      message: "Invalid email address",
+    })
+    .min(1, "Email address is required"),
+  name: z.string().optional(), // Name is optional for login, required for registration
 });
 
 export async function requestMagicLinkController(req: Request, res: Response) {
@@ -42,6 +45,9 @@ export async function requestMagicLinkController(req: Request, res: Response) {
         env.JWT_SECRET,
         { expiresIn: "15m" }
       );
+      console.log("========================");
+      console.log(env.JWT_SECRET);
+      console.log("========================");
 
       user.magicLinkToken = magicLinkToken;
       user.magicLinkExpires = new Date(Date.now() + 15 * 60 * 1000);
@@ -80,7 +86,6 @@ export async function verifyMagicLinkController(req: Request, res: Response) {
         userId: string;
         type: string;
       };
-
       if (decoded.type !== "magic") {
         res.status(401).json({ message: "Invalid token type" });
       } else {
@@ -124,6 +129,7 @@ export async function verifyMagicLinkController(req: Request, res: Response) {
         }
       }
     } catch (err) {
+      console.log(err);
       res.status(401).json({ message: "Invalid or expired magic link" });
     }
   }

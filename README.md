@@ -2,6 +2,8 @@
 
 **Base URL**: `http://localhost:8000` (or your deployed URL)
 
+- All endpoints are prefixed with the API version: `/v1` by default. You can change this via the `API_VERSION` environment variable.
+
 ## Authentication
 
 The API uses JWT-based authentication with magic links. Most endpoints require authentication via the `Authorization` header:
@@ -17,6 +19,8 @@ Authorization: Bearer <your-jwt-token>
 #### GET /
 
 Returns a simple health check message.
+
+Note: The actual path is versioned, e.g. `GET /v1/`.
 
 **Response:**
 
@@ -322,6 +326,198 @@ Authorization: Bearer <your-jwt-token>
 
 ---
 
+## Calendar Endpoints
+
+All calendar endpoints require authentication.
+
+**Headers:**
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+### Check Conflict
+
+#### POST /calendar/check-conflict
+
+Checks if there are conflicting events between a start and end time.
+
+**Request Body:**
+
+```json
+{
+  "start": "2024-01-01T09:00:00.000Z",
+  "end": "2024-01-01T10:00:00.000Z"
+}
+```
+
+**Response:**
+
+```json
+{
+  "conflict": true,
+  "conflicting_events": [/* provider-specific event objects */]
+}
+```
+
+### Create Event
+
+#### POST /calendar/create-event
+
+Creates a calendar event.
+
+**Request Body:**
+
+```json
+{
+  "start_time": "2024-01-01T09:00:00.000Z",
+  "end_time": "2024-01-01T10:00:00.000Z",
+  "title": "Standup",
+  "description": "Daily standup",
+  "participants": ["a@example.com", "b@example.com"],
+  "location": "Google Meet",
+  "reminders": [
+    { "method": "email", "minutes": 30 },
+    { "method": "popup", "minutes": 10 }
+  ]
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "event_id": "abcd1234",
+  "meet_link": "https://meet.google.com/...",
+  "start_time": "2024-01-01T09:00:00.000Z",
+  "end_time": "2024-01-01T10:00:00.000Z"
+}
+```
+
+### Edit Event
+
+#### POST /calendar/edit-event
+
+Edits properties of an existing event.
+
+**Request Body:**
+
+```json
+{
+  "event_id": "abcd1234",
+  "changes": {
+    "title": "New Title",
+    "description": "Updated description",
+    "add_participants": ["c@example.com"],
+    "remove_participants": ["b@example.com"],
+    "add_meet_link": true
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "event_id": "abcd1234",
+  "updated_fields": ["title", "participants", "meeting_link"],
+  "meet_link": "https://meet.google.com/..."
+}
+```
+
+### Delete Event
+
+#### DELETE /calendar/delete-event
+
+Deletes an event.
+
+**Request Body:**
+
+```json
+{
+  "event_id": "abcd1234"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Event deleted"
+}
+```
+
+### Fetch Events
+
+#### POST /calendar/fetch-events
+
+Fetches events in a date range (dates are interpreted in server-configured timezone).
+
+**Request Body:**
+
+```json
+{
+  "start_date": "2024-01-01", // required (YYYY-MM-DD)
+  "end_date": "2024-01-07"    // optional (YYYY-MM-DD)
+}
+```
+
+**Response:**
+
+```json
+{
+  "events": [
+    {
+      "event_id": "abcd1234",
+      "title": "Standup",
+      "description": "Daily standup",
+      "start_time": "2024-01-01T09:00:00.000Z",
+      "end_time": "2024-01-01T09:15:00.000Z",
+      "attendees": ["a@example.com", "b@example.com"]
+    }
+  ]
+}
+```
+
+- **400 Bad Request**: Missing `start_date`
+
+```json
+{
+  "success": false,
+  "message": "start_date is required"
+}
+```
+
+### Reschedule Event
+
+#### POST /calendar/reschedule-event
+
+Reschedules an existing event.
+
+**Request Body:**
+
+```json
+{
+  "event_id": "abcd1234",
+  "new_start_time": "2024-01-01T10:00:00.000Z",
+  "new_end_time": "2024-01-01T11:00:00.000Z"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "event_id": "abcd1234"
+}
+```
+
+---
+
 ## OAuth Endpoints
 
 ### Google OAuth
@@ -412,6 +608,14 @@ All endpoints may return the following error responses:
 
 ```json
 {
+  "message": "Missing or invalid token"
+}
+```
+
+or
+
+```json
+{
   "message": "Invalid or expired token"
 }
 ```
@@ -477,6 +681,7 @@ The following environment variables are required:
 - `GOOGLE_CLIENT_ID`: Google OAuth client ID
 - `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
 - `MONGODB_URI`: MongoDB connection string
+- `API_VERSION` (optional): API version path prefix (default: `v1`)
 
 ---
 
@@ -486,4 +691,5 @@ The following environment variables are required:
 2. **Verify the magic link**: Click the link in your email or use the token with `/auth/magic-link/verify`
 3. **Use the access token**: Include the returned token in the `Authorization` header for subsequent requests
 4. **Connect integrations**: Use the OAuth endpoints to connect third-party services
-5. **Refresh tokens**: Use the refresh token endpoint to get new access tokens when they expire
+5. **Calendar operations**: Use the calendar endpoints to manage events
+6. **Refresh tokens**: Use the refresh token endpoint to get new access tokens when they expire
