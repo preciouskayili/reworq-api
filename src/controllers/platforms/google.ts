@@ -4,13 +4,11 @@ import { AuthRequest } from "../../middleware/auth";
 import { z } from "zod";
 import { getDayBoundsInUTC } from "../../lib/utils";
 
-// Helper to provide readable Zod errors
 function formatZodError(error: z.ZodError) {
-  const flattened = error.flatten();
+  const flattened = z.treeifyError(error);
   return {
     message: "Invalid request payload",
-    fieldErrors: flattened.fieldErrors,
-    formErrors: flattened.formErrors,
+    ...flattened,
   };
 }
 
@@ -24,7 +22,7 @@ const createEventSchema = z.object({
   end_time: z.string().min(1, "end_time is required"),
   title: z.string().optional(),
   description: z.string().optional(),
-  participants: z.array(z.string().email()).optional(),
+  participants: z.array(z.email()).optional(),
   location: z.string().optional(),
   reminders: z.any().optional(),
 });
@@ -34,8 +32,8 @@ const editEventSchema = z.object({
   changes: z.object({
     title: z.string().optional(),
     description: z.string().optional(),
-    add_participants: z.array(z.string().email()).optional(),
-    remove_participants: z.array(z.string().email()).optional(),
+    add_participants: z.array(z.email()).optional(),
+    remove_participants: z.array(z.email()).optional(),
     add_meet_link: z.boolean().optional(),
   }),
 });
@@ -122,6 +120,7 @@ export async function createEventController(req: AuthRequest, res: Response) {
         error?.message === "Google client not initialized"
           ? "Google is not connected for this user"
           : "Unable to create event";
+      console.log(error);
 
       res.status(400).json({ success: false, message });
     }
@@ -266,10 +265,8 @@ export async function fetchEventsController(req: AuthRequest, res: Response) {
       const { timeMin } = getDayBoundsInUTC(start_date, "Africa/Lagos");
       let timeMax: string;
       if (end_date) {
-        // Use end of the end_date day
         timeMax = getDayBoundsInUTC(end_date, "Africa/Lagos").timeMax;
       } else {
-        // Default to same day range if end_date is not provided
         timeMax = getDayBoundsInUTC(start_date, "Africa/Lagos").timeMax;
       }
 

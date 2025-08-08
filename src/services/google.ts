@@ -7,16 +7,14 @@ import { AuthRequest } from "../middleware/auth";
 
 class GoogleService {
   private client: OAuth2Client | null = null;
+  private req: AuthRequest;
 
   constructor(req: AuthRequest) {
-    getGoogleService(req)
-      .then((client) => {
-        this.client = client;
-      })
-      .catch((error) => {
-        logger.error("Error initializing Google service:", error);
-        this.client = null;
-      });
+    this.req = req;
+  }
+
+  async googleService() {
+    return await getGoogleService(this.req);
   }
 
   /**
@@ -29,8 +27,8 @@ class GoogleService {
     start: string | Date,
     end: string | Date
   ): Promise<any[]> {
-    if (!this.client) throw new Error("Google client not initialized");
-    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const client = await this.googleService();
+    const calendar = google.calendar({ version: "v3", auth: client });
 
     const timeMin = typeof start === "string" ? start : start.toISOString();
     const timeMax = typeof end === "string" ? end : end.toISOString();
@@ -57,18 +55,44 @@ class GoogleService {
    * @param eventData - The event details (summary, description, start, end, etc.)
    */
   async createEvent(eventData: any) {
-    if (!this.client) throw new Error("Google client not initialized");
-    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const client = await this.googleService();
+    const calendar = google.calendar({ version: "v3", auth: client });
 
-    let requestBody = { ...eventData };
+    const {
+      start_time,
+      end_time,
+      title,
+      description,
+      participants,
+      location,
+      reminders,
+      ...rest
+    } = eventData || {};
+
+    let requestBody: any = {
+      summary: title,
+      description,
+      start: start_time ? { dateTime: start_time } : undefined,
+      end: end_time ? { dateTime: end_time } : undefined,
+      attendees: Array.isArray(participants)
+        ? participants.map((email: string) => ({ email }))
+        : undefined,
+      // Only set a physical location if it's not the special "google meet" marker
+      location:
+        typeof location === "string" &&
+        location.trim().toLowerCase() !== "google meet"
+          ? location
+          : undefined,
+      reminders,
+      ...rest,
+    };
 
     if (
-      eventData.location &&
-      typeof eventData.location === "string" &&
-      eventData.location.trim().toLowerCase() === "google meet"
+      typeof location === "string" &&
+      location.trim().toLowerCase() === "google meet"
     ) {
       requestBody = {
-        ...eventData,
+        ...requestBody,
         conferenceData: {
           createRequest: {
             requestId: `meet-${Date.now()}-${Math.floor(
@@ -96,8 +120,8 @@ class GoogleService {
    * @param updates - The updated event details.
    */
   async editEvent(eventId: string, updates: any) {
-    if (!this.client) throw new Error("Google client not initialized");
-    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const client = await this.googleService();
+    const calendar = google.calendar({ version: "v3", auth: client });
     const res = await calendar.events.patch({
       calendarId: "primary",
       eventId,
@@ -111,8 +135,8 @@ class GoogleService {
    * @param eventId - The ID of the event to delete.
    */
   async deleteEvent(eventId: string) {
-    if (!this.client) throw new Error("Google client not initialized");
-    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const client = await this.googleService();
+    const calendar = google.calendar({ version: "v3", auth: client });
     await calendar.events.delete({
       calendarId: "primary",
       eventId,
@@ -126,8 +150,8 @@ class GoogleService {
    * @param params - Optional query parameters (e.g., timeMin, timeMax, maxResults)
    */
   async fetchEvents(params: any = {}) {
-    if (!this.client) throw new Error("Google client not initialized");
-    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const client = await this.googleService();
+    const calendar = google.calendar({ version: "v3", auth: client });
     const res = await calendar.events.list({
       calendarId: "primary",
       ...params,
@@ -146,8 +170,8 @@ class GoogleService {
     newStart: string | Date,
     newEnd: string | Date
   ) {
-    if (!this.client) throw new Error("Google client not initialized");
-    const calendar = google.calendar({ version: "v3", auth: this.client });
+    const client = await this.googleService();
+    const calendar = google.calendar({ version: "v3", auth: client });
 
     const res = await calendar.events.patch({
       calendarId: "primary",
