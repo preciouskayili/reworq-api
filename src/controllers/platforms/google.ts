@@ -8,13 +8,13 @@ function formatZodError(error: z.ZodError) {
   const flattened = z.treeifyError(error);
   return {
     message: "Invalid request payload",
-    ...flattened,
+    errors: flattened,
   };
 }
 
 const checkConflictSchema = z.object({
-  start: z.string().min(1, "start is required"),
-  end: z.string().min(1, "end is required"),
+  start_time: z.string().min(1, "start time is required"),
+  end_time: z.string().min(1, "end time is required"),
 });
 
 const createEventSchema = z.object({
@@ -59,11 +59,11 @@ export async function checkConflictController(req: AuthRequest, res: Response) {
   if (!parsed.success) {
     res.status(400).json({ success: false, ...formatZodError(parsed.error) });
   } else {
-    const { start, end } = parsed.data;
+    const { start_time, end_time } = parsed.data;
     const googleService = new GoogleService(req);
 
     try {
-      const events = await googleService.checkConflict(start, end);
+      const events = await googleService.checkConflict(start_time, end_time);
       res.json({
         success: true,
         conflict: events.length > 0,

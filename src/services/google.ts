@@ -6,7 +6,6 @@ import { logger } from "../lib/logger";
 import { AuthRequest } from "../middleware/auth";
 
 class GoogleService {
-  private client: OAuth2Client | null = null;
   private req: AuthRequest;
 
   constructor(req: AuthRequest) {
