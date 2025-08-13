@@ -143,19 +143,16 @@ export async function editEventController(req: AuthRequest, res: Response) {
     const payload: any = {};
     const updated_fields: string[] = [];
 
-    // Title
     if (changes.title) {
       payload.summary = changes.title;
       updated_fields.push("title");
     }
 
-    // Description
     if (changes.description) {
       payload.description = changes.description;
       updated_fields.push("description");
     }
 
-    // Meet link
     if (changes.add_meet_link) {
       payload.conferenceData = {
         createRequest: {
@@ -195,12 +192,10 @@ export async function editEventController(req: AuthRequest, res: Response) {
         }
       }
 
-      // Only set if not empty
       payload.attendees = attendees;
       updated_fields.push("participants");
     }
 
-    // Send update
     const updated = await googleService.editEvent(event_id, payload);
 
     res.json({
