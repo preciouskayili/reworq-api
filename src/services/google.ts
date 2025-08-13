@@ -22,30 +22,22 @@ class GoogleService {
    * @param end - The end time of the event (ISO string or Date).
    * @returns An array of conflicting events, or an empty array if none found.
    */
-  async checkConflict(
-    start: string | Date,
-    end: string | Date
-  ): Promise<any[]> {
+  async checkConflict(start: string | Date, end: string | Date) {
     const client = await this.googleService();
     const calendar = google.calendar({ version: "v3", auth: client });
 
     const timeMin = typeof start === "string" ? start : start.toISOString();
     const timeMax = typeof end === "string" ? end : end.toISOString();
 
-    const res = await calendar.events.list({
-      calendarId: "primary",
-      timeMin,
-      timeMax,
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 10,
+    const res = await calendar.freebusy.query({
+      requestBody: {
+        timeMin,
+        timeMax,
+        items: [{ id: "primary" }],
+      },
     });
 
-    // Filter out cancelled events
-    const events = (res.data.items || []).filter(
-      (event) => event.status !== "cancelled"
-    );
-
+    const events = res.data.calendars?.primary?.busy || [];
     return events;
   }
 
@@ -145,6 +137,20 @@ class GoogleService {
   }
 
   /**
+   * Fetches events from the user's primary Calendar using the eventId
+   * @param eventId - The ID of the event to fetch.
+   */
+  async fetchEvent(eventId: string) {
+    const client = await this.googleService();
+    const calendar = google.calendar({ version: "v3", auth: client });
+    const res = await calendar.events.get({
+      calendarId: "primary",
+      eventId,
+    });
+    return res.data;
+  }
+
+  /**
    * Fetches events from the user's primary Google Calendar.
    * @param params - Optional query parameters (e.g., timeMin, timeMax, maxResults)
    */
@@ -155,6 +161,7 @@ class GoogleService {
       calendarId: "primary",
       ...params,
     });
+
     return res.data.items || [];
   }
 

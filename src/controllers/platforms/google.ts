@@ -129,101 +129,97 @@ export async function createEventController(req: AuthRequest, res: Response) {
 
 export async function editEventController(req: AuthRequest, res: Response) {
   const parse = editEventSchema.safeParse(req.body);
-
   if (!parse.success) {
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       ...formatZodError(parse.error),
     });
-  } else {
-    const { event_id, changes } = parse.data;
-    const googleService = new GoogleService(req);
+  }
 
-    try {
-      const payload: any = {};
-      const updated_fields: string[] = [];
+  const { event_id, changes } = parse.data;
+  const googleService = new GoogleService(req);
 
-      if (changes.title) {
-        payload.summary = changes.title;
-        updated_fields.push("title");
+  try {
+    const payload: any = {};
+    const updated_fields: string[] = [];
+
+    // Title
+    if (changes.title) {
+      payload.summary = changes.title;
+      updated_fields.push("title");
+    }
+
+    // Description
+    if (changes.description) {
+      payload.description = changes.description;
+      updated_fields.push("description");
+    }
+
+    // Meet link
+    if (changes.add_meet_link) {
+      payload.conferenceData = {
+        createRequest: {
+          requestId: `meet-${event_id}-${Date.now()}`,
+          conferenceSolutionKey: { type: "hangoutsMeet" },
+        },
+      };
+      updated_fields.push("meeting_link");
+    }
+
+    if (changes.add_participants || changes.remove_participants) {
+      const event = await googleService.fetchEvent(event_id);
+
+      let attendees = Array.isArray(event.attendees)
+        ? event.attendees.map((a) => ({
+            email: typeof a === "string" ? a : a.email,
+          }))
+        : [];
+
+      if (changes.remove_participants) {
+        attendees = attendees.filter(
+          (attendee) =>
+            attendee.email &&
+            !changes.remove_participants!.includes(attendee.email)
+        );
       }
 
-      if (changes.description) {
-        payload.description = changes.description;
-        updated_fields.push("description");
-      }
+      if (changes.add_participants) {
+        const existingEmails = new Set(
+          attendees.map((a) => a.email).filter(Boolean)
+        );
 
-      if (changes.add_meet_link) {
-        payload.conferenceData = {
-          createRequest: {
-            requestId: `meet-${event_id}-${Date.now()}`,
-            conferenceSolutionKey: {
-              type: "hangoutsMeet",
-            },
-          },
-        };
-        updated_fields.push("meeting_link");
-      }
-
-      const hasParticipants =
-        changes.add_participants || changes.remove_participants;
-
-      if (hasParticipants) {
-        const event = await googleService.fetchEvents({ eventId: event_id });
-        const singleEvent = Array.isArray(event) ? event[0] : event;
-
-        let attendees = Array.isArray(singleEvent?.attendees)
-          ? [...singleEvent.attendees]
-          : [];
-
-        if (changes.remove_participants) {
-          attendees = attendees.filter((attendee) => {
-            const email =
-              typeof attendee === "string" ? attendee : attendee?.email;
-            return email && !changes.remove_participants!.includes(email);
-          });
-        }
-
-        if (changes.add_participants) {
-          const existingEmails = new Set(
-            attendees
-              .map((attendee) =>
-                typeof attendee === "string" ? attendee : attendee?.email
-              )
-              .filter(Boolean)
-          );
-
-          for (const email of changes.add_participants) {
-            if (!existingEmails.has(email)) {
-              attendees.push({ email });
-            }
+        for (const email of changes.add_participants) {
+          if (!existingEmails.has(email)) {
+            attendees.push({ email });
           }
         }
-
-        payload.attendees = attendees;
-        updated_fields.push("participants");
       }
 
-      const updated = await googleService.editEvent(event_id, payload);
-
-      res.json({
-        success: true,
-        event_id: updated.id || event_id,
-        updated_fields,
-        meet_link:
-          updated.hangoutLink || updated.conferenceData?.entryPoints?.[0]?.uri,
-      });
-    } catch (error: any) {
-      const message =
-        error?.message === "Google client not initialized"
-          ? "Google is not connected for this user"
-          : "Failed to edit event";
-      res.status(400).json({
-        success: false,
-        message,
-        event: null,
-      });
+      // Only set if not empty
+      payload.attendees = attendees;
+      updated_fields.push("participants");
     }
+
+    // Send update
+    const updated = await googleService.editEvent(event_id, payload);
+
+    res.json({
+      success: true,
+      event_id: updated.id || event_id,
+      updated_fields,
+      meet_link:
+        updated.hangoutLink || updated.conferenceData?.entryPoints?.[0]?.uri,
+    });
+  } catch (error: any) {
+    const message =
+      error?.message === "Google client not initialized"
+        ? "Google is not connected for this user"
+        : "Failed to edit event";
+    res.status(400).json({
+      success: false,
+      message,
+      event: null,
+    });
   }
 }
 
