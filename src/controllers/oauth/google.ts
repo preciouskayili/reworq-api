@@ -62,7 +62,9 @@ export async function googleCallbackController(
         user_id: userId,
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
-        expires_at: tokens.expiry_date,
+        expires_at: tokens.expiry_date
+          ? new Date(tokens.expiry_date)
+          : undefined,
       });
 
       res.status(200).json({

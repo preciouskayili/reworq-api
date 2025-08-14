@@ -3,6 +3,7 @@ import GoogleService from "../../services/google";
 import { AuthRequest } from "../../middleware/auth";
 import { z } from "zod";
 import { getDayBoundsInUTC } from "../../lib/utils";
+import { logger } from "../../lib/logger";
 
 function formatZodError(error: z.ZodError) {
   const flattened = z.treeifyError(error);
@@ -74,6 +75,7 @@ export async function checkConflictController(req: AuthRequest, res: Response) {
         error?.message === "Google client not initialized"
           ? "Google is not connected for this user"
           : "Unable to check for conflicts";
+      logger.error(error);
       res.status(400).json({ success: false, message });
     }
   }

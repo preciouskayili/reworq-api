@@ -12,6 +12,31 @@ const auth = new OAuth2Client(
   env.GOOGLE_REDIRECT_URI
 );
 
+// Preemptive refresh window to avoid near-expiry race conditions
+const TOKEN_SKEW_MS = 5 * 60 * 1000;
+
+async function ensureFreshAccessToken(client: OAuth2Client, integration: any) {
+  const now = Date.now();
+  const exp = integration.expires_at
+    ? new Date(integration.expires_at).getTime()
+    : 0;
+
+  if (!exp || exp - now <= TOKEN_SKEW_MS) {
+    try {
+      await client.getAccessToken();
+    } catch (err: any) {
+      // If refresh fails due to revocation, keep DB consistent and rethrow
+      if (err?.response?.data?.error === "invalid_grant") {
+        await IntegrationModel.updateOne(
+          { _id: integration._id },
+          { $set: { updated_at: new Date() } }
+        );
+      }
+      throw err;
+    }
+  }
+}
+
 export async function refreshAndSaveTokens(
   client: OAuth2Client,
   integration: any
@@ -26,9 +51,10 @@ export async function refreshAndSaveTokens(
     )
       updates.refresh_token = tokens.refresh_token;
     if (tokens.expiry_date) {
-      const iso = new Date(tokens.expiry_date).toISOString();
+      const asDate = new Date(tokens.expiry_date);
+      const iso = asDate.toISOString();
       if (iso !== integration.expires_at?.toISOString())
-        updates.expires_at = tokens.expiry_date;
+        updates.expires_at = asDate;
     }
 
     if (Object.keys(updates).length) {
@@ -37,6 +63,8 @@ export async function refreshAndSaveTokens(
         { _id: integration._id },
         { $set: updates }
       );
+      // Keep in-memory copy updated during this request lifecycle
+      Object.assign(integration, updates);
     }
   });
 }
@@ -76,8 +104,7 @@ export async function getGoogleService(req: AuthRequest) {
   });
 
   await refreshAndSaveTokens(client, integration);
-
-  await client.getAccessToken();
+  await ensureFreshAccessToken(client, integration);
 
   return client;
 }
@@ -121,8 +148,7 @@ export async function getGoogleServiceByUserId(
   });
 
   await refreshAndSaveTokens(client, integration);
-
-  await client.getAccessToken();
+  await ensureFreshAccessToken(client, integration);
 
   return client;
 }
@@ -133,6 +159,7 @@ export async function getGoogleOAuthUrl(scopes: string[], state?: string) {
     scope: scopes,
     state,
     prompt: "consent",
+    include_granted_scopes: true,
   });
 
   return url;

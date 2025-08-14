@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import { google } from "googleapis";
+import { calendar_v3, google } from "googleapis";
 import { env } from "../config/env";
 import { getGoogleService } from "../lib/googleapis";
 import { logger } from "../lib/logger";
@@ -26,19 +26,48 @@ class GoogleService {
     const client = await this.googleService();
     const calendar = google.calendar({ version: "v3", auth: client });
 
-    const timeMin = typeof start === "string" ? start : start.toISOString();
-    const timeMax = typeof end === "string" ? end : end.toISOString();
+    const startTime = new Date(start);
+    const endTime = new Date(end);
 
-    const res = await calendar.freebusy.query({
-      requestBody: {
-        timeMin,
-        timeMax,
-        items: [{ id: "primary" }],
-      },
+    const res = await calendar.events.list({
+      calendarId: "primary",
+      timeMin: startTime.toISOString(),
+      timeMax: endTime.toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
     });
 
-    const events = res.data.calendars?.primary?.busy || [];
-    return events;
+    const events = res.data.items || [];
+    const conflicts: calendar_v3.Schema$Event[] = [];
+
+    for (const event of events) {
+      if (event.status === "cancelled") continue;
+
+      const eventStart = event.start?.dateTime
+        ? new Date(event.start.dateTime)
+        : null;
+
+      const eventEnd = event.end?.dateTime
+        ? new Date(event.end.dateTime)
+        : null;
+
+      if (!eventStart || !eventEnd) continue;
+
+      if (eventStart < endTime && startTime < eventEnd) {
+        conflicts.push({
+          id: event.id,
+          summary: event.summary,
+          start: {
+            dateTime: eventStart.toISOString(),
+          },
+          end: {
+            dateTime: eventEnd.toISOString(),
+          },
+        });
+      }
+    }
+
+    return conflicts;
   }
 
   /**
