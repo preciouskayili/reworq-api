@@ -1,4 +1,4 @@
-# Reworq API Documentation
+**# Reworq API Documentation
 
 **Base URL**: `http://localhost:8000` (or your deployed URL)
 
@@ -693,3 +693,4 @@ The following environment variables are required:
 4. **Connect integrations**: Use the OAuth endpoints to connect third-party services
 5. **Calendar operations**: Use the calendar endpoints to manage events
 6. **Refresh tokens**: Use the refresh token endpoint to get new access tokens when they expire
+**

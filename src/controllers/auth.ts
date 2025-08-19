@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { env } from "../config/env";
 import { Resend } from "resend";
-import { logger } from "../lib/logger";
 
 const resend = new Resend(env.RESEND_API_KEY);
 
@@ -45,9 +44,6 @@ export async function requestMagicLinkController(req: Request, res: Response) {
         env.JWT_SECRET,
         { expiresIn: "15m" }
       );
-      console.log("========================");
-      console.log(env.JWT_SECRET);
-      console.log("========================");
 
       user.magicLinkToken = magicLinkToken;
       user.magicLinkExpires = new Date(Date.now() + 15 * 60 * 1000);
@@ -57,7 +53,7 @@ export async function requestMagicLinkController(req: Request, res: Response) {
       // Send magic link email
       const magicLinkUrl = `${
         env.FRONTEND_URL || "http://localhost:3000"
-      }/magic-link/verify?token=${magicLinkToken}`;
+      }/auth/callback?token=${magicLinkToken}`;
 
       try {
         await resend.emails.send({
@@ -118,7 +114,7 @@ export async function verifyMagicLinkController(req: Request, res: Response) {
           await user.save();
 
           const tokenJwt = jwt.sign({ userId: user._id }, env.JWT_SECRET, {
-            expiresIn: "15m",
+            expiresIn: "24h",
           });
 
           res.status(200).json({
